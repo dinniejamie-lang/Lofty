@@ -20,7 +20,7 @@ struct SearchResult {
     Move bestMove = MOVE_NONE;
     Value score = VALUE_ZERO;
     int selDepth = 0; 
-    int completedDepth = 0; // NEW: Tracks the deepest fully completed depth for SMP voting
+    int completedDepth = 0;
 };
 
 void init_search();

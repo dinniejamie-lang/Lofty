@@ -1,9 +1,10 @@
-// eval.cpp — Tapered evaluation with Pawn Hash, Dynamic Bishop Pair, Eyesight, and Relations.
+// eval.cpp — Tapered evaluation with Pawn Hash, Dynamic Bishop Pair, Eyesight, Relations, & Fischval.
 #include "eval.h"
 #include "position.h"
 #include "bitboard.h"
 #include "eyesight.h"
 #include "relations.h"
+#include "fischval.h"
 
 #include <array>
 #include <algorithm>
@@ -105,7 +106,6 @@ Value evaluate(const Position& pos) {
     eg += pe.eg;
     
     // 2. Dynamic Bishop Pair
-    // The bishop pair is only fully effective if the enemy has pawns on both wings.
     Bitboard wPawns = pos.pieces(WHITE, PAWN);
     Bitboard bPawns = pos.pieces(BLACK, PAWN);
     
@@ -129,11 +129,14 @@ Value evaluate(const Position& pos) {
     // 4. Relations: Threats, Pressure, and Geometric King Safety
     evaluate_relations(pos, mg, eg);
     
-    // 5. Tempo Bonus
+    // 5. Fischval: Fischer Vectors (Key Attackers, Hollow Threats, All Piece Drawbacks)
+    evaluate_fischval(pos, mg, eg);
+    
+    // 6. Tempo Bonus
     mg += 10;
     eg += 5;
     
-    // 6. Tapered Evaluation
+    // 7. Tapered Evaluation
     int phase = 24;
     phase -= popcount(pos.pieces(KNIGHT)) * 1;
     phase -= popcount(pos.pieces(BISHOP)) * 1;

@@ -9,7 +9,7 @@ namespace lofty {
 
 class Position;
 
-// init_eval — must be called once at startup to initialize pawn masks.
+// init_eval — must be called once at startup to load PSQT tables.
 void init_eval();
 
 // evaluate — returns the eval score from the side-to-move's perspective.

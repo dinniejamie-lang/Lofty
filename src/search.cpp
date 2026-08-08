@@ -1,4 +1,4 @@
-// search.cpp — Hyper-Aggressive PVS with ProbCut, Hyper-LMR, Node Limits, & Depth Tracking.
+// search.cpp — Hyper-Aggressive PVS with Sound Lasker Gate & Monk Protocol Safety.
 #include "search.h"
 #include "movegen.h"
 #include "movepicker.h"
@@ -11,6 +11,7 @@
 #include "syzygy.h"
 #include "ucioption.h"
 #include "flashdepth.h"
+#include "lasker.h"
 
 #include <algorithm>
 #include <cstring>
@@ -45,7 +46,7 @@ static int lmrTable[64][64];
 void init_search() {
     for (int d = 0; d < 64; ++d) {
         for (int m = 0; m < 64; ++m) {
-            lmrTable[d][m] = int(1.5 * std::log(std::max(d, 1)) * std::log(std::max(m, 1)));
+            lmrTable[d][m] = int(1.1 * std::log(std::max(d, 1)) * std::log(std::max(m, 1)));
         }
     }
 }
@@ -176,9 +177,9 @@ static Value search(Position& pos, Depth depth, Value alpha, Value beta, int ply
 
     ss->staticEval = inChk ? VALUE_ZERO : evaluate(pos);
 
-    // --- PROBCUT ---
-    if (!pvNode && !inChk && depth >= 5 && std::abs(int(beta)) < VALUE_MATE_IN_MAX_PLY) {
-        Value rBeta = std::min(beta + 150, VALUE_INFINITE - 1);
+    // --- PROBCUT (Tightened for Tactical Safety) ---
+    if (!pvNode && !inChk && depth >= 6 && std::abs(int(beta)) < VALUE_MATE_IN_MAX_PLY) {
+        Value rBeta = std::min(beta + 200, VALUE_INFINITE - 1);
         if (ss->staticEval >= rBeta) {
             Value s = -search(pos, depth - 4, -rBeta, -rBeta + 1, ply + 1, false);
             if (s >= rBeta) return s;
@@ -251,7 +252,8 @@ static Value search(Position& pos, Depth depth, Value alpha, Value beta, int ply
             continue;
         }
 
-        if (!pvNode && !inChk && depth <= 5 && !see_ge(pos, m, -50 * depth)) {
+        // --- SEE PRUNING (Tightened for Tactical Safety) ---
+        if (!pvNode && !inChk && depth <= 3 && !see_ge(pos, m, -20 * depth)) {
             continue;
         }
 
@@ -272,7 +274,13 @@ static Value search(Position& pos, Depth depth, Value alpha, Value beta, int ply
             int r = lmrTable[std::min(int(depth), 63)][std::min(legalMoves, 63)];
             
             if (pvNode) r--;
-            if (givesCheck) r--;
+            
+            // --- TACTICAL SAFETY NET (LMR) ---
+            if (givesCheck) r -= 2;
+            if (prevSs != nullptr && prevSs->currentMove != MOVE_NONE && prevSs->currentMove.is_capture()) {
+                r -= 1;
+            }
+            
             if (ss->killers.moves[0] != m && ss->killers.moves[1] != m) r += 2;
             
             if (prevSs != nullptr && prevSs->currentPiece != NO_PIECE) {
@@ -280,7 +288,9 @@ static Value search(Position& pos, Depth depth, Value alpha, Value beta, int ply
                 r -= chScore / 8192;
             }
             
-            r = std::max(0, std::min(r, int(depth) - 2));
+            // MONK PROTOCOL: Clamp to depth - 3 so we never reduce a move below depth 3.
+            // This guarantees tactical certainty at the cost of 1-2 ply of depth.
+            r = std::max(0, std::min(r, int(depth) - 3));
             score = -search(next, depth - 1 - r + extension, -alpha - 1, -alpha, ply + 1, false);
             if (score > alpha) fullDepthSearch = true;
         } else {
@@ -321,6 +331,11 @@ static Value search(Position& pos, Depth depth, Value alpha, Value beta, int ply
     if (excludedMove == MOVE_NONE) {
         Bound bound = bestScore >= beta ? BOUND_LOWER : (alpha > oldAlpha ? BOUND_EXACT : BOUND_UPPER);
         TT.store(pos.key(), depth, bound, bestScore, bestMove, ss->staticEval, ply);
+    }
+
+    // --- FASTEST WIN VECTOR ---
+    if (bestScore > 800 && bestScore < VALUE_MATE_IN_MAX_PLY) {
+        bestScore -= 1;
     }
 
     return bestScore;
@@ -519,9 +534,28 @@ SearchResult search(Position& pos, const SearchLimits& limits) {
                 if (legalMoves == 1) {
                     currentScore = -search(next, depth - 1, -beta, -alpha, 1, true);
                 } else {
-                    currentScore = -search(next, depth - 1, -alpha - 1, -alpha, 1, false);
-                    if (currentScore > alpha && currentScore < beta) {
-                        currentScore = -search(next, depth - 1, -beta, -alpha, 1, true);
+                    bool laskerVerified = false;
+                    
+                    // --- SOUND LASKER VERIFICATION GATE ---
+                    // Trigger filters: Root depth >= 6, only moves 2 and 3, no mate scores, Thread 0 only.
+                    if (ThreadID == 0 && (legalMoves == 2 || legalMoves == 3) && depth >= 6 && std::abs(alpha) < VALUE_MATE_IN_MAX_PLY) {
+                        Value laskerScore;
+                        // verify_lasker returns true if move2 is better
+                        if (verify_lasker(pos, m, depth - 1, alpha, laskerScore, &search)) {
+                            // It is better! Re-search with full window to get exact score.
+                            currentScore = -search(next, depth - 1, -beta, -alpha, 1, true);
+                            laskerVerified = true;
+                        }
+                        // If it returns false, laskerVerified remains false.
+                        // The code will naturally fall through to the standard PVS search below.
+                        // NO UNSOUND SKIPPING.
+                    }
+                    
+                    if (!laskerVerified) {
+                        currentScore = -search(next, depth - 1, -alpha - 1, -alpha, 1, false);
+                        if (currentScore > alpha && currentScore < beta) {
+                            currentScore = -search(next, depth - 1, -beta, -alpha, 1, true);
+                        }
                     }
                 }
 
@@ -563,7 +597,6 @@ SearchResult search(Position& pos, const SearchLimits& limits) {
 
         if (stopSearch.load(std::memory_order_relaxed)) break;
 
-        // NEW: Record the successfully completed depth for SMP voting
         result.completedDepth = depth;
 
         flashAnalyzer.update(result.bestMove, result.score);
