@@ -79,11 +79,9 @@ static Move parse_move(const Position& pos, const std::string& str) {
     return MOVE_NONE;
 }
 
-// Watcher thread: launches the pool, waits for it to finish, and prints bestmove
 static std::thread searchThread;
 
 static void handle_position(Position& pos, std::istringstream& iss) {
-    // If a search is somehow still running, stop and join it before changing the position
     if (searchThread.joinable()) {
         Time.stop();
         searchThread.join();
@@ -95,7 +93,7 @@ static void handle_position(Position& pos, std::istringstream& iss) {
     iss >> token;
     if (token == "startpos") {
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-        iss >> token; // might be "moves"
+        iss >> token; 
     } else if (token == "fen") {
         while (iss >> token && token != "moves") {
             fen += token + " ";
@@ -115,7 +113,6 @@ static void handle_position(Position& pos, std::istringstream& iss) {
 }
 
 static void handle_go(Position& pos, std::istringstream& iss) {
-    // Clean up the previous search thread if it exists
     if (searchThread.joinable()) {
         Time.stop();
         searchThread.join();
@@ -133,12 +130,11 @@ static void handle_go(Position& pos, std::istringstream& iss) {
         else if (token == "binc") iss >> binc;
         else if (token == "movestogo") iss >> movestogo;
         else if (token == "depth") iss >> limits.maxDepth;
-        else if (token == "nodes") iss >> limits.maxNodes; // PARSING NODES
+        else if (token == "nodes") iss >> limits.maxNodes;
         else if (token == "movetime") { iss >> limits.maxTimeMs; limits.maxDepth = 64; }
         else if (token == "infinite") { limits.maxTimeMs = 0; limits.maxDepth = 64; limits.maxNodes = 0; }
     }
 
-    // Initialize TimeManager. If time is 0, it treats it as infinite (perfect for node limits)
     if (limits.maxTimeMs > 0) {
         Time.init(limits.maxTimeMs, limits.maxTimeMs, 0, 0, 1, pos.side_to_move());
     } else {
@@ -147,7 +143,6 @@ static void handle_go(Position& pos, std::istringstream& iss) {
     
     Time.start();
 
-    // Launch a watcher thread that manages the Lazy SMP pool
     searchThread = std::thread([&pos, limits]() {
         Threads.start(pos, limits);
         Threads.wait();
@@ -168,8 +163,9 @@ void uci_loop() {
         iss >> token;
 
         if (token == "uci") {
-            std::cout << "id name Lofty 0.1\n";
-            std::cout << "id author User\n";
+            // FIXED: Updated name and author for Lofty 1.0
+            std::cout << "id name Lofty 1.0\n";
+            std::cout << "id author Nutty-Games\n";
             Options.print();
             std::cout << "uciok" << std::endl;
         } 
@@ -204,7 +200,6 @@ void uci_loop() {
             }
             Options.set(name, value);
             
-            // If the GUI changed the Threads option, resize the pool
             if (name == "Threads") {
                 Threads.set(Options.get("Threads").as_int());
             }
