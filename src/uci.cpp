@@ -165,7 +165,7 @@ void uci_loop() {
         if (token == "uci") {
             // FIXED: Updated name and author for Lofty 1.0
             std::cout << "id name Lofty 1.0\n";
-            std::cout << "id author Nutty-Games\n";
+            std::cout << "id author Nutty-Games (Very cool guy)\n";
             Options.print();
             std::cout << "uciok" << std::endl;
         } 
