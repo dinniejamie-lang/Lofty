@@ -1,7 +1,7 @@
 ***
 
-# Lofty 1.0 - HCE-MAXXING
-### Philosophy of maxing out the entire HCE and squeezing the performance.
+# Lofty - HCE-MAXXING
+### Philosophy of maxing out the entire HCE and squeezing the performance. 
 
 **Estimated Strength:** 2900 - 3150 CCRL Elo (Grandmaster / Super-Grandmaster level)
 **Estimated Speed:** 50,000,000 - 100,000,000 NPS (Nodes Per Second) on modern multi-core CPUs
