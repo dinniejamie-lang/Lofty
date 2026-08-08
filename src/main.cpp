@@ -103,13 +103,25 @@ int main(int argc, char* argv[]) {
     std::ios::sync_with_stdio(false);
     std::cin.tie(nullptr);
 
+    // ========================================================
+    // === ASCII ART ===
+    std::cout << R"(
+ _     ____  _____ _____ ___  _
+/ \   /  _ \/    //__ __\\  \//
+| |   | / \||  __\  / \   \  / 
+| |_/\| \_/|| |     | |   / /  
+\____/\____/\_/     \_/  /_/   
+                               
+)" << "\n";
+    // ========================================================
+
     // Initialize all engine subsystems
     lofty::init_bitboards();
     lofty::Zobrist::init();
     lofty::init_eval();
     lofty::init_search();
     
-    // Initialize UCI Options (this automatically allocates the default 64MB TT)
+    // Initialize UCI Options (this will automatically allocate the default 256MB TT)
     lofty::init_options(lofty::Options);
     lofty::Hist.clear();
 
