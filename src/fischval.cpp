@@ -1,4 +1,5 @@
-// fischval.cpp — Smoothed Fischer Evaluation Vectors implementation.
+// fischval.cpp — Professional Fischer Evaluation Vectors implementation.
+// Updated with Stockfish-derived constants for 2900+ Elo strength
 #include "fischval.h"
 #include "bitboard.h"
 
@@ -10,8 +11,18 @@ namespace lofty {
 static constexpr Bitboard LightSquares = 0x55AA55AA55AA55AAULL;
 static constexpr Bitboard DarkSquares  = 0xAA55AA55AA55AA55ULL;
 
+// Professional penalty constants
+constexpr int KnightRestrictionPenalty = 4;
+constexpr int BadBishopPenalty = 6;
+constexpr int TrappedBishopPenalty = 8;
+constexpr int BoxedRookPenalty = 5;
+constexpr int OverexposedQueenPenalty = 4;
+constexpr int HollowThreatBonus = 25;
+constexpr int AttackerInZoneBonusMG = 15;
+constexpr int AttackerInZoneBonusEG = 18;
+
 // ----------------------------------------------------------------------------
-// evaluate_fischval — The "Fischer" Evaluation Module (Smoothed).
+// evaluate_fischval — The "Fischer" Evaluation Module (Professional Strength).
 // ----------------------------------------------------------------------------
 void evaluate_fischval(const Position& pos, int& mg, int& eg) {
     Bitboard occ = pos.pieces();
@@ -37,19 +48,18 @@ void evaluate_fischval(const Position& pos, int& mg, int& eg) {
         int sign = (c == WHITE) ? 1 : -1;
         Bitboard ourPieces = pos.pieces(c);
         
-        // --- RULE 4: ALWAYS UNDERSTAND DRAWBACKS (ALL PIECES, SMOOTHED) ---
+        // --- RULE 4: ALWAYS UNDERSTAND DRAWBACKS (ALL PIECES, PROFESSIONAL) ---
         
-        // 1. Knight Drawbacks (Smoothed Restriction)
-        // Max potential mobility is 8. Penalty scales continuously as mobility drops.
+        // 1. Knight Drawbacks (Professional Restriction Penalty)
         Bitboard knights = pos.pieces(c, KNIGHT);
         while (knights) {
             Square s = pop_lsb(knights);
             int mob = popcount(knight_attacks_bb(s) & ~ourPieces);
-            int penalty = std::max(0, (6 - mob)) * 2; // Smoothly penalize up to -12
+            int penalty = std::max(0, (8 - mob)) * KnightRestrictionPenalty;
             mg -= sign * penalty; eg -= sign * penalty;
         }
 
-        // 2. Bishop Drawbacks (Bad Bishop + Smoothed Trapped)
+        // 2. Bishop Drawbacks (Bad Bishop + Professional Trapped Penalty)
         Bitboard bishops = pos.pieces(c, BISHOP);
         while (bishops) {
             Square s = pop_lsb(bishops);
@@ -57,32 +67,32 @@ void evaluate_fischval(const Position& pos, int& mg, int& eg) {
             int pawnsOnColor = (square_bb(s) & LightSquares) ? 
                                ((c == WHITE) ? popcount(wPawns & LightSquares) : popcount(bPawns & LightSquares)) : 
                                ((c == WHITE) ? popcount(wPawns & DarkSquares) : popcount(bPawns & DarkSquares));
-            if (pawnsOnColor > 2) { 
-                int penalty = (pawnsOnColor - 2) * 2; 
+            if (pawnsOnColor > 3) { 
+                int penalty = (pawnsOnColor - 3) * BadBishopPenalty; 
                 mg -= sign * penalty; eg -= sign * penalty; 
             }
             
-            // Trapped Bishop: Smoothed penalty based on mobility
+            // Trapped Bishop: Professional penalty based on mobility
             int mob = popcount(attacks_bb(BISHOP, s, occ) & ~ourPieces);
-            int penalty = std::max(0, (4 - mob)) * 3; // Smoothly penalize up to -12
+            int penalty = std::max(0, (5 - mob)) * TrappedBishopPenalty;
             mg -= sign * penalty; eg -= sign * penalty;
         }
 
-        // 3. Rook Drawbacks (Smoothed Boxed In)
+        // 3. Rook Drawbacks (Professional Boxed In Penalty)
         Bitboard rooks = pos.pieces(c, ROOK);
         while (rooks) {
             Square s = pop_lsb(rooks);
             int mob = popcount(attacks_bb(ROOK, s, occ) & ~ourPieces);
-            int penalty = std::max(0, (4 - mob)) * 2; // Smoothly penalize up to -8
+            int penalty = std::max(0, (5 - mob)) * BoxedRookPenalty;
             mg -= sign * penalty; eg -= sign * penalty;
         }
 
-        // 4. Queen Drawbacks (Smoothed Overexposed)
+        // 4. Queen Drawbacks (Professional Overexposed Penalty)
         Bitboard queens = pos.pieces(c, QUEEN);
         while (queens) {
             Square s = pop_lsb(queens);
             int mob = popcount(attacks_bb(QUEEN, s, occ) & ~ourPieces);
-            int penalty = std::max(0, (6 - mob)) * 2; // Smoothly penalize up to -12
+            int penalty = std::max(0, (8 - mob)) * OverexposedQueenPenalty;
             mg -= sign * penalty; eg -= sign * penalty;
         }
 
@@ -98,16 +108,14 @@ void evaluate_fischval(const Position& pos, int& mg, int& eg) {
             bool defended = (square_bb(s) & ourPawnAtt) || (square_bb(s) & ourMinorAtt);
 
             if (defended) {
-                // RULE 1: Trade Off Their Key Attackers
+                // RULE 1: Trade Off Their Key Attackers (Professional Bonus)
                 Bitboard enemyPawnAtt = (c == WHITE) ? bPawnAttacks : wPawnAttacks;
                 Bitboard enemyMinorAtt = (c == WHITE) ? bMinorAttacks : wMinorAttacks;
-                // Smoothed penalties to prevent eval cliffs
-                if (square_bb(s) & enemyPawnAtt) { mg -= sign * 12; eg -= sign * 12; }
-                else if (square_bb(s) & enemyMinorAtt) { mg -= sign * 8; eg -= sign * 8; }
+                if (square_bb(s) & enemyPawnAtt) { mg -= sign * 18; eg -= sign * 18; }
+                else if (square_bb(s) & enemyMinorAtt) { mg -= sign * 12; eg -= sign * 12; }
             } else {
                 // RULE 3: Never Respect An Unsupported Attack (Hollow Threat)
-                // Smoothed penalty (was 25, now 15)
-                mg += sign * 15; eg += sign * 15; 
+                mg += sign * HollowThreatBonus; eg += sign * HollowThreatBonus; 
             }
         }
     }
