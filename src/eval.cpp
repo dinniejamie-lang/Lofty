@@ -5,6 +5,7 @@
 #include "eyesight.h"
 #include "relations.h"
 #include "fischval.h"
+#include "simd.h"
 
 #include <array>
 #include <algorithm>
@@ -51,6 +52,122 @@ static void evaluate_pawns(const Position& pos, PawnEntry& entry) {
     int mg = 0;
     int eg = 0;
 
+#if LOFTY_AVX2 && defined(__AVX2__)
+    // SIMD-accelerated pawn evaluation for AVX2-capable CPUs
+    // Process pawns in batches of 4 using AVX2 instructions
+    
+    for (Color c : {WHITE, BLACK}) {
+        Bitboard pawns = pos.pieces(c, PAWN);
+        Bitboard ourPawns = pawns;
+        Bitboard theirPawns = pos.pieces(~c, PAWN);
+        
+        // Collect up to 4 pawns for SIMD processing
+        simd::PawnEvalState state;
+        state.count = 0;
+        
+        while (pawns && state.count < 4) {
+            Square s = pop_lsb(pawns);
+            File f = file_of(s);
+            
+            state.our_pawns[state.count] = square_bb(s);
+            state.their_pawns[state.count] = theirPawns;
+            
+            // Pre-compute isolation mask for this pawn
+            Bitboard adjFiles = 0;
+            if (f > FILE_A) adjFiles |= FILE_BBS[f - 1];
+            if (f < FILE_H) adjFiles |= FILE_BBS[f + 1];
+            state.isolated_masks[state.count] = adjFiles;
+            
+            // Pre-compute passed pawn mask
+            Bitboard inFront = 0;
+            Rank r = rank_of(s);
+            if (c == WHITE) {
+                for (int rr = int(r) + 1; rr <= RANK_8; ++rr) 
+                    inFront |= RANK_BBS[rr];
+            } else {
+                for (int rr = int(r) - 1; rr >= RANK_1; --rr) 
+                    inFront |= RANK_BBS[rr];
+            }
+            state.passed_masks[state.count] = (adjFiles | FILE_BBS[f]) & inFront;
+            
+            state.count++;
+        }
+        
+        // Process 4 pawns in parallel if we have enough
+        if (state.count == 4) {
+            int batch_mg = 0, batch_eg = 0;
+            simd::evaluate_pawns_simd(state, batch_mg, batch_eg);
+            mg += batch_mg;
+            eg += batch_eg;
+            
+            // Continue with remaining pawns using scalar code
+            while (pawns) {
+                Square s = pop_lsb(pawns);
+                File f = file_of(s);
+                Rank r = rank_of(s);
+                
+                Bitboard adjOurPawns = ourPawns & FILE_BBS[f];
+                if (adjOurPawns & (c == WHITE ? (square_bb(s) >> 8) : (square_bb(s) << 8))) {
+                    mg -= 10;
+                    eg -= 20;
+                }
+                
+                Bitboard adjFiles = 0;
+                if (f > FILE_A) adjFiles |= FILE_BBS[f - 1];
+                if (f < FILE_H) adjFiles |= FILE_BBS[f + 1];
+                
+                if (!(ourPawns & adjFiles)) {
+                    mg -= 15;
+                    eg -= 15;
+                }
+                
+                Bitboard theirInFront = theirPawns & ((adjFiles | FILE_BBS[f]) & 
+                    (c == WHITE ? (~RANK_BBS[RANK_1] << (int(r)*8)) : (~RANK_BBS[RANK_8] >> (64-(int(r)*8)))));
+                
+                bool passed = true;
+                for (int checkSq = 0; checkSq < 64; checkSq++) {
+                    if (theirInFront & square_bb(Square(checkSq))) {
+                        passed = false;
+                        break;
+                    }
+                }
+                
+                if (passed && !(theirPawns & PassedMask[c][s])) {
+                    int rank = (c == WHITE) ? int(r) : (7 - int(r));
+                    int bonus = rank * rank * 5;
+                    mg += bonus;
+                    eg += bonus + rank * 10;
+                }
+            }
+        } else {
+            // Fallback to scalar for fewer than 4 pawns
+            pawns = pos.pieces(c, PAWN);
+            while (pawns) {
+                Square s = pop_lsb(pawns);
+                File f = file_of(s);
+                Rank r = rank_of(s);
+                
+                if (ourPawns & file_bb(f) & (c == WHITE ? (square_bb(s) >> 8) : (square_bb(s) << 8))) {
+                    mg -= 10;
+                    eg -= 20;
+                }
+                
+                if (!(ourPawns & IsolatedMask[s])) {
+                    mg -= 15;
+                    eg -= 15;
+                }
+                
+                if (!(theirPawns & PassedMask[c][s])) {
+                    int rank = (c == WHITE) ? int(r) : (7 - int(r));
+                    int bonus = rank * rank * 5;
+                    mg += bonus;
+                    eg += bonus + rank * 10;
+                }
+            }
+        }
+    }
+#else
+    // Scalar fallback for non-AVX2 CPUs
     for (Color c : {WHITE, BLACK}) {
         Bitboard pawns = pos.pieces(c, PAWN);
         Bitboard ourPawns = pawns;
@@ -61,7 +178,7 @@ static void evaluate_pawns(const Position& pos, PawnEntry& entry) {
             File f = file_of(s);
             Rank r = rank_of(s);
             
-            if (ourPawns & file_bb(f) & (c == WHITE ? (square_bb(s) - 1) : ~(square_bb(s) - 1))) {
+            if (ourPawns & file_bb(f) & (c == WHITE ? (square_bb(s) >> 8) : (square_bb(s) << 8))) {
                 mg -= 10;
                 eg -= 20;
             }
@@ -73,12 +190,13 @@ static void evaluate_pawns(const Position& pos, PawnEntry& entry) {
             
             if (!(theirPawns & PassedMask[c][s])) {
                 int rank = (c == WHITE) ? int(r) : (7 - int(r));
-                int bonus = rank * rank * 5; 
+                int bonus = rank * rank * 5;
                 mg += bonus;
                 eg += bonus + rank * 10;
             }
         }
     }
+#endif
     
     entry.mg = mg;
     entry.eg = eg;

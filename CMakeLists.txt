@@ -17,6 +17,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -march=native 
         -mbmi2          # Enables PEXT instruction
         -mpopcnt        # Enables POPCNT instruction
+        -mavx2          # Enables AVX2 for SIMD operations
         -funroll-loops 
         -fno-exceptions 
         -fno-rtti
