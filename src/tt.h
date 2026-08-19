@@ -4,6 +4,7 @@
 
 #include "types.h"
 #include <vector>
+#include <cstddef>
 
 namespace lofty {
 
