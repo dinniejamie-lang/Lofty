@@ -30,14 +30,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(Lofty PRIVATE 
         -O3 
         -march=native 
-        -mbmi2          # Enables PEXT instruction
-        -mpopcnt        # Enables POPCNT instruction
-        -mavx2          # Enables AVX2 for SIMD operations
-        -funroll-loops 
+        -flto
+        -DNDEBUG
         -fno-exceptions 
         -fno-rtti
-        -ffast-math     # Aggressive math optimizations
-        -fno-math-errno # Skip errno checks for math functions
         ${PGO_FLAGS}
         -Wall 
         -Wextra

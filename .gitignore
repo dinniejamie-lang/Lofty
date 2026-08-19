@@ -4,75 +4,41 @@ build/
 dist/
 *.o
 *.obj
-*.exe
-*.dll
 *.so
 *.a
+*.lib
+*.dll
+*.exe
 *.out
 
 # Dependencies
+node_modules/
 venv/
 .venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.mypy_cache/
-.pytest_cache/
+*.egg-info/
 
-# CMake specific
-CMakeFiles/
-CMakeCache.txt
-cmake_install.manifest
-*.cmake
-
-# Logs and temp files
-*.log
-*.tmp
+# IDE and editor files
+.vscode/
+.idea/
 *.swp
 *.swo
+*.tmp
+
+# Logs
+*.log
 
 # Environment
 .env
 .env.local
 *.env.*
 
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
 # Coverage
 coverage/
 htmlcov/
 .coverage
 
-# Compressed files
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+# OS files
+.DS_Store
+Thumbs.db
 ```
