@@ -12,6 +12,21 @@ add_executable(Lofty ${SOURCES})
 target_include_directories(Lofty PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # Profile Guided Optimization (PGO) Support
+    # Usage: 
+    # 1. Generate profile: cmake -DENABLE_PGO=GENERATE .. && make && ./lofty bench
+    # 2. Use profile: cmake -DENABLE_PGO=USE .. && make
+    if(ENABLE_PGO STREQUAL "GENERATE")
+        set(PGO_FLAGS "-fprofile-generate")
+        set(PGO_LINK_FLAGS "-fprofile-generate")
+    elseif(ENABLE_PGO STREQUAL "USE")
+        set(PGO_FLAGS "-fprofile-use -fprofile-correction")
+        set(PGO_LINK_FLAGS "-fprofile-use")
+    else()
+        set(PGO_FLAGS "")
+        set(PGO_LINK_FLAGS "")
+    endif()
+
     target_compile_options(Lofty PRIVATE 
         -O3 
         -march=native 
@@ -21,11 +36,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -funroll-loops 
         -fno-exceptions 
         -fno-rtti
+        -ffast-math     # Aggressive math optimizations
+        -fno-math-errno # Skip errno checks for math functions
+        ${PGO_FLAGS}
         -Wall 
         -Wextra
     )
     # Static linking ensures no missing DLLs in GUIs!
-    target_link_options(Lofty PRIVATE -static -static-libgcc -static-libstdc++ -lpthread)
+    target_link_options(Lofty PRIVATE -static -static-libgcc -static-libstdc++ -lpthread ${PGO_LINK_FLAGS})
 endif()
 
 if(MSVC)

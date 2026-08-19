@@ -1,36 +1,53 @@
 ```
-# CMake build artifacts
+# Build artifacts
 build/
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-
-# Compiled objects and executables
+dist/
 *.o
 *.obj
-*.out
-*.bin
-*.a
-*.so
-*.dll
 *.exe
+*.dll
+*.so
+*.a
+*.out
 
-# IDE and editor files
+# Dependencies
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+.pytest_cache/
+
+# CMake specific
+CMakeFiles/
+CMakeCache.txt
+cmake_install.manifest
+*.cmake
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 
-# Logs
-*.log
-
-# System files
+# OS
 .DS_Store
 Thumbs.db
 
-# Coverage reports
+# Coverage
 coverage/
 htmlcov/
 .coverage
